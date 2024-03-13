@@ -474,16 +474,13 @@ bool FleetProvisioning::RegisterThing(Iotidentity::IotIdentityClient identityCli
         return false;
     }
 
-    if (collectSystemInformation)
+    LOG_INFO(TAG, "Collect system information");
+    if (!PopulateSystemInformation())
     {
-        LOG_INFO(TAG, "Collecting system information");
-        if (!PopulateSystemInformation())
-        {
-            LOGM_ERROR(TAG, "*** %s: Failed to collect system information. ***", DeviceClient::DC_FATAL_ERROR);
-            return false;
-        }
-        LOGM_INFO(TAG, "System information: \n\t%s", MapToString(templateParameters).c_str());
+        LOGM_ERROR(TAG, "*** %s: Failed to collect system information. ***", DeviceClient::DC_FATAL_ERROR);
+        return false;
     }
+    LOGM_INFO(TAG, "System information: \n\t%s", MapToString(templateParameters).c_str());
 
     LOG_INFO(TAG, "Publishing to RegisterThing topic");
     RegisterThingRequest registerThingRequest;
@@ -838,10 +835,12 @@ bool FleetProvisioning::CollectNetworkInformation()
         // We only search for addresses on eth0 interface.
         if (family == AF_INET && strncmp(name, "eth0", 3) == 0)
         {
-            struct in_addr addr = (reinterpret_cast<struct sockaddr_in *>(ifa->ifa_addr))->sin_addr;
+            struct in_addr addr = ((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
             inet_ntop(AF_INET, &addr, ip, INET_ADDRSTRLEN);
 
-            struct ifreq ifr;
+            struct ifreq ifr
+            {
+            };
             unsigned char *mac;
 
             strncpy(ifr.ifr_name, name, IFNAMSIZ - 1);
@@ -853,7 +852,7 @@ bool FleetProvisioning::CollectNetworkInformation()
                 LOG_ERROR(TAG, "*** %s: Failed to get MAC address for interface ***");
                 return false;
             }
-            mac = reinterpret_cast<unsigned char *>(ifr.ifr_hwaddr.sa_data);
+            mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
 
             Aws::Crt::Optional<std::string> params(FormatMessage(
                 R"({"DeviceIPAddress": "%s", "DeviceMACAddress": "%02x:%02x:%02x:%02x:%02x:%02x"})",
@@ -899,12 +898,12 @@ bool FleetProvisioning::CalculateFileSHA256Value(const char *fileName, const std
     }
 
     const int bufferSize = 8192;
-    char buffer[bufferSize];
+    char *buffer = new char[bufferSize];
     while (file.good())
     {
         file.read(buffer, bufferSize);
 
-        if (!EVP_DigestUpdate(mdctx, buffer, file.gcount()))
+        if (EVP_DigestUpdate(mdctx, buffer, file.gcount()) != 1)
         {
             LOG_ERROR(TAG, "*** %s: Failed to update EVP_DigestUpdate");
             return false;
@@ -912,7 +911,7 @@ bool FleetProvisioning::CalculateFileSHA256Value(const char *fileName, const std
     }
 
     unsigned char hashBuffer[SHA256_DIGEST_LENGTH];
-    if (EVP_DigestFinal_ex(mdctx, hashBuffer, NULL) != 1)
+    if (EVP_DigestFinal_ex(mdctx, hashBuffer,NULL) != 1)
     {
         LOG_ERROR(TAG, "*** %s: Failed to finalize EVP_DigestFinal_ex");
         return false;
