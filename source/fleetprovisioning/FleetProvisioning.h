@@ -237,13 +237,6 @@ namespace Aws
                      *
                      * @return returns false if client is not able to collect required information
                      */
-                    bool PopulateNetworkInformation();
-
-                    /**
-                     * \brief Collect network information for fleet provisioning.
-                     *
-                     * @return returns false if client is not able to collect required information
-                     */
                     bool CollectNetworkInformation();
 
                     /**
